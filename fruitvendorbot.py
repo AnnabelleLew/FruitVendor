@@ -58,12 +58,14 @@ async def on_message(message):
         await message.channel.send('Congrats {0}, you have gotten a {1}! :{2}:'.format(message.author.mention, gift, emoji))
 
         # stores the fruit in the user's inventory
-        if message.author.id not in inventory.keys():
-            inventory[message.author.id] = dict()
-        if gift not in inventory[message.author.id].keys():
-            inventory[message.author.id][gift] = 1
+        if message.guild.id not in inventory.keys():
+            inventory[message.guild.id] = dict()
+        if message.author.id not in inventory[message.guild.id].keys():
+            inventory[message.guild.id][message.author.id] = dict()
+        if gift not in inventory[message.guild.id][message.author.id].keys():
+            inventory[message.guild.id][message.author.id][gift] = 1
         else:
-            inventory[message.author.id][gift] += 1
+            inventory[message.guild.id][message.author.id][gift] += 1
 
     # !check command: check's a user's fruit inventory
     if message.content.startswith('!check'):
@@ -78,10 +80,13 @@ async def on_message(message):
 
         # generates message of inventory
         unsent = "{0} currently has:".format(person.mention)
-        if person.id not in inventory.keys():
+        if message.guild.id not  in inventory.keys():
             await message.channel.send("{0} has no fruit!".format(person.mention))
             return
-        for fruit in inventory[person.id].keys():
+        if person.id not in inventory[message.guild.id].keys():
+            await message.channel.send("{0} has no fruit!".format(person.mention))
+            return
+        for fruit in inventory[message.guild.id][person.id].keys():
             if fruit == "green apple":
                 emoji = "green_apple"
             elif fruit == "red apple":
@@ -94,7 +99,7 @@ async def on_message(message):
                 emoji = "cherries"
             else:
                 emoji = fruit
-            unsent += "\n{0} :{1}:: {2}".format(fruit, emoji, inventory[person.id][fruit])
+            unsent += "\n{0} :{1}:: {2}".format(fruit, emoji, inventory[message.guild.id][person.id][fruit])
 
         # sends message with inventory
         await message.channel.send(unsent)
@@ -128,7 +133,7 @@ async def on_reaction_add(reaction, user):
             # if the reaction emoji is a fruit, continue, otherwise, cancel giving
             if reaction.emoji in emojis:
                 # if the reaction emoji is in user inventory, give, otherwise, cancel giving
-                if fruits[emojis.index(reaction.emoji)] in inventory[user.id].keys() and inventory[user.id][fruits[emojis.index(reaction.emoji)]] > 0:
+                if fruits[emojis.index(reaction.emoji)] in inventory[reaction.message.guild.id][user.id].keys() and inventory[reaction.message.guild.id][user.id][fruits[emojis.index(reaction.emoji)]] > 0:
                     # checks for the intended recipient
                     if (reaction.message.mentions.index(user) == 0):
                         recipient = reaction.message.mentions[1]
@@ -136,13 +141,15 @@ async def on_reaction_add(reaction, user):
                         recipient = reaction.message.mentions[0]
 
                     # removes fruit from user inventory, and gives it to recipient
-                    inventory[user.id][fruits[emojis.index(reaction.emoji)]] -= 1
-                    if recipient.id not in inventory.keys():
-                        inventory[recipient.id] = dict()
-                    if fruits[emojis.index(reaction.emoji)] not in inventory[recipient.id].keys():
-                        inventory[recipient.id][fruits[emojis.index(reaction.emoji)]] = 1
+                    inventory[reaction.message.guild.id][user.id][fruits[emojis.index(reaction.emoji)]] -= 1
+                    if reaction.message.guild.id not in inventory.keys():
+                        inventory[reaction.message.guild.id] = dict()
+                    if recipient.id not in inventory[reaction.message.guild.id].keys():
+                        inventory[reaction.message.guild.id][recipient.id] = dict()
+                    if fruits[emojis.index(reaction.emoji)] not in inventory[reaction.message.guild.id][recipient.id].keys():
+                        inventory[reaction.message.guild.id][recipient.id][fruits[emojis.index(reaction.emoji)]] = 1
                     else:
-                        inventory[recipient.id][fruits[emojis.index(reaction.emoji)]] += 1
+                        inventory[reaction.message.guild.id][recipient.id][fruits[emojis.index(reaction.emoji)]] += 1
 
                     # send successful fruit-giving message
                     await reaction.message.channel.send("{0} has successfully send a {1} {2} to {3}!".format(user.mention, fruits[emojis.index(reaction.emoji)], reaction.emoji, recipient.mention))
