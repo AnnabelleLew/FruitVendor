@@ -14,3 +14,5 @@ Add a cool fruit vendor to your server, and share fruit with your friends! Uses 
 !give [user]: Give fruit.
 
 !check [user]: Check your fruit.
+
+!eat: Eat a fruit of your choice.
