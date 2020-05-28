@@ -16,6 +16,9 @@ emojis = ["🍌", "🍒", "🥥", "🍏", "🍇", "🥝", "🍋", "🥭", "🍈"
 # used for !eat command
 aftertastes = ["It tastes delicious!", "It was old and mushy...", "It's super sweet!", "It was too sour...", "Yummy!", "Nom nom nom...", "It was super juicy!"]
 
+# used for !throw command
+splats = ["Splat!", "It explodes in their face!", "It bounces right off them!", "Ewwwww!"]
+
 # inventory stores all the fruit, uses pickle to save user data when bot is taken offline
 inventory = dict()
 
@@ -37,7 +40,7 @@ async def on_message(message):
 
     # !help command: explains all the commands to the user
     if message.content == '!help':
-        await message.channel.send('Welcome to the fruit vendor!\n*!get*: Get new fruit.\n*!give [user]*: Give fruit.\n*!check [user]*: Check your fruit.\n*!eat*: Eat a fruit of your choice.')
+        await message.channel.send('Welcome to the fruit vendor!\n*!get*: Get new fruit.\n*!give [user]*: Give fruit.\n*!check [user]*: Check your fruit.\n*!eat*: Eat a fruit of your choice.\n*!throw [user]*: Throw a fruit at someone.')
 
     # !get command: gives a random fruit to the user
     if message.content == '!get':
@@ -128,11 +131,23 @@ async def on_message(message):
         else:
             await message.channel.send("{0}, what fruit would you like to eat? (React to this message with the fruit of your choice, or react with a non-fruit emoji to cancel!)".format(message.author.mention))
 
+    # !throw: user throws a fruit at another person
+    if message.content.startswith('!throw'):
+        # checks who to throw fruit at
+        if len(message.mentions) == 1:
+            person = message.mentions[0]
+        else:
+            await message.channel.send("Recheck your message, I don't know who to throw fruit at!")
+            return
+
+        # generates message to figure out giving, waits for reaction in order to give
+        await message.channel.send("{0}, what fruit would you like to throw at {1}? (React to this message with the fruit of your choice, or react with a non-fruit emoji to cancel!)".format(message.author.mention, person.mention))
+
     # saves inventory after action
     with open('fruit_inventory.pickle', 'wb') as handle:
         pickle.dump(inventory, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-# checks reactions, used for !get command and !eat command
+# checks reactions, used for !get command, !eat, and !throw command
 @client.event
 async def on_reaction_add(reaction, user):
     # cares about bot message about giving fruit
@@ -183,7 +198,7 @@ async def on_reaction_add(reaction, user):
         else:
             # if the reaction emoji is a fruit, continue, otherwise, cancel giving
             if reaction.emoji in emojis:
-                # if the reaction emoji is in user inventory, give, otherwise, cancel giving
+                # if the reaction emoji is in user inventory, eat, otherwise, cancel eating
                 if fruits[emojis.index(reaction.emoji)] in inventory[reaction.message.guild.id][user.id].keys() and inventory[reaction.message.guild.id][user.id][fruits[emojis.index(reaction.emoji)]] > 0:
                     # removes fruit from user inventory
                     inventory[reaction.message.guild.id][user.id][fruits[emojis.index(reaction.emoji)]] -= 1
@@ -199,6 +214,41 @@ async def on_reaction_add(reaction, user):
                 await reaction.message.channel.send("Okay, {0} is not hungry anymore.".format(user.mention))
 
             # delete "eating" message once complete, and save inventory
+            await reaction.message.delete()
+            with open('fruit_inventory.pickle', 'wb') as handle:
+                pickle.dump(inventory, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    # cares about bot message about throwing fruit
+    elif reaction.message.content.find(", what fruit would you like to throw at ") != -1 and reaction.message.author == client.user:
+        # only cares about the giver. KNOWN BUG: the "victim" can hijack the message, and become the attacker.
+        if user not in reaction.message.mentions:
+            pass
+            return
+        else:
+            # if the reaction emoji is a fruit, continue, otherwise, cancel throwing
+            if reaction.emoji in emojis:
+                # if the reaction emoji is in user inventory, throw, otherwise, cancel throwing
+                if fruits[emojis.index(reaction.emoji)] in inventory[reaction.message.guild.id][user.id].keys() and inventory[reaction.message.guild.id][user.id][fruits[emojis.index(reaction.emoji)]] > 0:
+                    # checks for the intended recipient
+                    if (reaction.message.mentions.index(user) == 0):
+                        recipient = reaction.message.mentions[1]
+                    else:
+                        recipient = reaction.message.mentions[0]
+
+                    # removes fruit from user inventory, and throws it at recipient
+                    inventory[reaction.message.guild.id][user.id][fruits[emojis.index(reaction.emoji)]] -= 1
+
+                    # chooses random message
+                    num = randrange(len(splats))
+                    splat = splats[num]
+
+                    # send successful fruit-throwing message
+                    await reaction.message.channel.send("{0} has thrown a {1} {2} at {3}. {4}".format(user.mention, fruits[emojis.index(reaction.emoji)], reaction.emoji, recipient.mention, splat))
+                else:
+                    await reaction.message.channel.send("You don't have that fruit!")
+            else:
+                await reaction.message.channel.send("Okay, {0} has had a change of heart.".format(user.mention))
+
+            # delete "giving" message once complete, and save inventory
             await reaction.message.delete()
             with open('fruit_inventory.pickle', 'wb') as handle:
                 pickle.dump(inventory, handle, protocol=pickle.HIGHEST_PROTOCOL)
