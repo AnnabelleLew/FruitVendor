@@ -13,6 +13,9 @@ client = discord.Client()
 fruits = ["banana", "cherry", "coconut", "green apple", "grape", "kiwi", "lemon", "mango", "melon", "orange", "peach", "pear", "pineapple", "red apple", "strawberry", "watermelon"]
 emojis = ["🍌", "🍒", "🥥", "🍏", "🍇", "🥝", "🍋", "🥭", "🍈", "🍊", "🍑", "🍐", "🍍", "🍎", "🍓", "🍉"]
 
+# used for !eat command
+aftertastes = ["It tastes delicious!", "It was old and mushy...", "It's super sweet!", "It was too sour...", "Yummy!", "Nom nom nom...", "It was super juicy!"]
+
 # inventory stores all the fruit, uses pickle to save user data when bot is taken offline
 inventory = dict()
 
@@ -23,7 +26,7 @@ with open('fruit_inventory.pickle', 'rb') as handle:
 @client.event
 async def on_ready():
     print('We have logged in as {0.user}'.format(client))
-    game = discord.Game("!help | !get | !give | !check")
+    game = discord.Game("!help")
     await client.change_presence(status=discord.Status.online, activity=game)
 
 # reads user messages
@@ -34,7 +37,7 @@ async def on_message(message):
 
     # !help command: explains all the commands to the user
     if message.content == '!help':
-        await message.channel.send('Welcome to the fruit vendor!\n*!get*: Get new fruit.\n*!give [user]*: Give fruit.\n*!check [user]*: Check your fruit.')
+        await message.channel.send('Welcome to the fruit vendor!\n*!get*: Get new fruit.\n*!give [user]*: Give fruit.\n*!check [user]*: Check your fruit.\n*!eat*: Eat a fruit of your choice.')
 
     # !get command: gives a random fruit to the user
     if message.content == '!get':
@@ -104,7 +107,7 @@ async def on_message(message):
         # sends message with inventory
         await message.channel.send(unsent)
 
-    # !give: let's user give a fruit to another user
+    # !give: lets user give a fruit to another user
     if message.content.startswith('!give'):
         # checks who to give fruit to
         if len(message.mentions) == 1:
@@ -116,14 +119,23 @@ async def on_message(message):
         # generates message to figure out giving, waits for reaction in order to give
         await message.channel.send("{0}, what fruit would you like to give to {1}? (React to this message with the fruit of your choice, or react with a non-fruit emoji to cancel!)".format(message.author.mention, person.mention))
 
+    # !eat: user chooses a fruit and eats it
+    if message.content == '!eat':
+        if message.guild.id not in inventory.keys():
+            await message.channel.send("You have no fruit to eat!")
+        elif message.author.id not in inventory[message.guild.id].keys():
+            await message.channel.send("You have no fruit to eat!")
+        else:
+            await message.channel.send("{0}, what fruit would you like to eat? (React to this message with the fruit of your choice, or react with a non-fruit emoji to cancel!)".format(message.author.mention))
+
     # saves inventory after action
     with open('fruit_inventory.pickle', 'wb') as handle:
         pickle.dump(inventory, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-# checks reactions, used for !get command
+# checks reactions, used for !get command and !eat command
 @client.event
 async def on_reaction_add(reaction, user):
-    # only cares about bot message about giving fruit
+    # cares about bot message about giving fruit
     if reaction.message.content.find(", what fruit would you like to give to ") != -1 and reaction.message.author == client.user:
         # only cares about the giver. KNOWN BUG: the "recipient" can hijack the message, and become the giver.
         if user not in reaction.message.mentions:
@@ -159,6 +171,34 @@ async def on_reaction_add(reaction, user):
                 await reaction.message.channel.send("Okay, {0} is not giving fruit anymore.".format(user.mention))
 
             # delete "giving" message once complete, and save inventory
+            await reaction.message.delete()
+            with open('fruit_inventory.pickle', 'wb') as handle:
+                pickle.dump(inventory, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    # cares about bot message about eating fruit
+    elif reaction.message.content.find(", what fruit would you like to eat?") != -1 and reaction.message.author == client.user:
+        # only cares about the eater.
+        if user not in reaction.message.mentions:
+            pass
+            return
+        else:
+            # if the reaction emoji is a fruit, continue, otherwise, cancel giving
+            if reaction.emoji in emojis:
+                # if the reaction emoji is in user inventory, give, otherwise, cancel giving
+                if fruits[emojis.index(reaction.emoji)] in inventory[reaction.message.guild.id][user.id].keys() and inventory[reaction.message.guild.id][user.id][fruits[emojis.index(reaction.emoji)]] > 0:
+                    # removes fruit from user inventory
+                    inventory[reaction.message.guild.id][user.id][fruits[emojis.index(reaction.emoji)]] -= 1
+                    # choose random message to say after eating fruit
+                    num = randrange(len(aftertastes))
+                    review = aftertastes[num]
+
+                    # send successful eating message
+                    await reaction.message.channel.send("{0} has eaten a {1} {2}! {3}".format(user.mention, fruits[emojis.index(reaction.emoji)], reaction.emoji, review))
+                else:
+                    await reaction.message.channel.send("You don't have that fruit!")
+            else:
+                await reaction.message.channel.send("Okay, {0} is not hungry anymore.".format(user.mention))
+
+            # delete "eating" message once complete, and save inventory
             await reaction.message.delete()
             with open('fruit_inventory.pickle', 'wb') as handle:
                 pickle.dump(inventory, handle, protocol=pickle.HIGHEST_PROTOCOL)
